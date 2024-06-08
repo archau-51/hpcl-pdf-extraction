@@ -1,7 +1,6 @@
 import ocrmypdf
 from pypdf import PdfReader
 import os
-from distutils.log import debug
 import camelot
 from fileinput import filename
 from flask import *
