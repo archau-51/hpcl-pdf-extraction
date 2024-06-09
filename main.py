@@ -23,15 +23,19 @@ def ocr_pdf(pdf_path):
 def m(n):
     texts = ocr_pdf(n)
     if texts:
-        file1 = open(f"out_{n[:-4]}.txt", "a")
-        for text in texts:
-            file1.write(text)
-        file1.close()
+        # file1 = open(f"{n[:-4]}.txt", "a")
+        # for text in texts:
+        #     file1.write(text)
+        # file1.close()
         # tables = camelot.read_pdf("out.pdf", pages='1-end')
         # tables.export('out.csv', f='csv')
-        os.remove(f"./out_{n}")
+        # os.remove(f"./{n}")
         tables = camelot.read_pdf(n, pages="1-end")
-        tables.export(f"out_{n[:-4]}.csv", f="csv", compress=True)
+        try:
+            os.remove("out.zip")
+        except:
+            pass
+        tables.export(f"out.csv", f="csv", compress=True)
         os.remove(n)
     else:
         print("Failed to read the PDF.")
@@ -54,12 +58,7 @@ def success():
         f.save(secure_filename(res + ".pdf"))
         m(res + ".pdf")
         # return render_template("acknowledgement.html", name = f.filename)
-        try:
-            return send_file("out_" + res + ".zip", as_attachment=True)
-        finally:
-            pass
-            # __import__("time").sleep(200);
-            # os.remove("out_" + res + ".zip")
+        return send_file("out.zip", as_attachment=True)
 
 
 if __name__ == "__main__":
