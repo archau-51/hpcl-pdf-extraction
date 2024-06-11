@@ -23,13 +23,6 @@ def ocr_pdf(pdf_path):
 def m(n):
     texts = ocr_pdf(n)
     if texts:
-        # file1 = open(f"{n[:-4]}.txt", "a")
-        # for text in texts:
-        #     file1.write(text)
-        # file1.close()
-        # tables = camelot.read_pdf("out.pdf", pages='1-end')
-        # tables.export('out.csv', f='csv')
-        # os.remove(f"./{n}")
         tables = camelot.read_pdf(n, pages="1-end")
         try:
             os.remove("out.zip")
