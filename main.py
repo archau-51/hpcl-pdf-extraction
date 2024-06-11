@@ -7,6 +7,7 @@ from flask import *
 import string
 import random
 from werkzeug.utils import secure_filename
+import spacy
 
 
 def ocr_pdf(pdf_path):
