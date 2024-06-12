@@ -7,7 +7,9 @@ from flask import *
 import string
 import random
 from werkzeug.utils import secure_filename
-import spacy
+
+
+# import spacy
 
 
 def ocr_pdf(pdf_path):
@@ -21,6 +23,7 @@ def ocr_pdf(pdf_path):
         return None
 
 
+# noinspection PyBroadException
 def m(n):
     texts = ocr_pdf(n)
     if texts:
