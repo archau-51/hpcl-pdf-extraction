@@ -1,11 +1,11 @@
-import ocrmypdf
-from pypdf import PdfReader
 import os
-import camelot
-from fileinput import filename
-from flask import *
-import string
 import random
+import string
+
+import camelot
+import ocrmypdf
+from flask import *
+from pypdf import PdfReader
 from werkzeug.utils import secure_filename
 
 
