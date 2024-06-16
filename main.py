@@ -7,6 +7,7 @@ import ocrmypdf
 from flask import *
 from pypdf import PdfReader
 from werkzeug.utils import secure_filename
+from pypdf import PdfReader
 
 
 # import spacy
@@ -14,8 +15,9 @@ from werkzeug.utils import secure_filename
 
 def ocr_pdf(pdf_path):
     try:
-        ocrmypdf.ocr(pdf_path, f"out_{pdf_path}", redo_ocr=True)
-        reader = PdfReader(f"out_{pdf_path}")
+        # ocrmypdf.ocr(pdf_path, f"out_{pdf_path}", redo_ocr=True)
+        # reader = PdfReader(f"out_{pdf_path}")
+        reader = PdfReader(pdf_path)
         for page in reader.pages:
             yield page.extract_text()
     except Exception as e:
@@ -30,9 +32,13 @@ def m(n):
         tables = camelot.read_pdf(n, pages="1-end")
         try:
             os.remove("out.zip")
+            os.remove("out.txt")
         except:
             pass
         tables.export(f"out.csv", f="csv", compress=True)
+        with open("out.txt", "a+", encoding="utf-8") as f:
+            for text in texts:
+                f.write(text)
         os.remove(n)
     else:
         print("Failed to read the PDF.")
