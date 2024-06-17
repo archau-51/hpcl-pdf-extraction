@@ -1,6 +1,5 @@
 import nltk
-def extract_info(text, keyword):
-    sentencizer = nltk.data.load('tokenizers/punkt/english.pickle')
+def extract_info(text=str, keyword=str):
     """
     Extracts information associated with a keyword from the given text.
 
@@ -11,6 +10,7 @@ def extract_info(text, keyword):
     Returns:
         str: The extracted information related to the keyword.
     """
+    sentencizer = nltk.data.load('tokenizers/punkt/english.pickle')
     # Split the text into sentences
     sentences = sentencizer.tokenize(text)
 
@@ -20,15 +20,3 @@ def extract_info(text, keyword):
             yield sentence
 
 
-
-# Example usage
-sample_text = """
-Mount Everest, also known as Sagarmatha in Nepal, is the highest mountain in the world.
-It stands at an elevation of 8,848.86 meters (29,031.7 feet) above sea level.
-Many climbers attempt to reach its summit, facing extreme conditions and challenges.
-good elevation.
-"""
-
-search_keyword = "sagar"
-result = [x for x in extract_info(sample_text, search_keyword)]
-print(result)
