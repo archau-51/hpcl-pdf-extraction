@@ -1,4 +1,3 @@
-import spacy
 from transformers import pipeline
 from typing import List, Dict
 
