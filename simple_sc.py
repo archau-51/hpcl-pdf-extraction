@@ -1,4 +1,6 @@
 import nltk
+nltk.download('punkt')
+
 def extract_info(text=str, keyword=str):
     """
     Extracts information associated with a keyword from the given text.
