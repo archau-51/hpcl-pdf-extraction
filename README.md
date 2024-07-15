@@ -8,7 +8,7 @@
    git clone https://github.com/archau-51/hpcl-pdf-extraction.git && cd hpcl-pdf-extraction
    ```
 
-2.  Install ghostscript from https://ghostscript.com/
+2.  Install ghostscript from https://ghostscript.com/ and make sure it is on PATH
 
 3. Install python dependencies
    
