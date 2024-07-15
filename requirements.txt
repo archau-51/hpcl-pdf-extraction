@@ -1,0 +1,8 @@
+camelot-py
+Flask
+pypdf
+Werkzeug
+pandas
+transformers
+numpy
+nltk

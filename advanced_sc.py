@@ -1,5 +1,5 @@
 from transformers import pipeline
-from typing import List, Dict
+# from typing import List, Dict
 
 def adv_extract(text, keyword):
     # nlp = spacy.load('en_core_web_sm')
