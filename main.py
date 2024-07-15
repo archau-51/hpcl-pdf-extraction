@@ -36,7 +36,7 @@ def m(n):
             os.remove("out.txt")
         except:
             pass
-        tables.export(f"out.csv", f="csv", compress=True)
+        tables.export("out.csv", f="csv", compress=True)
         with open("out.txt", "a+", encoding="utf-8") as f:
             for text in texts:
                 f.write(text)
@@ -62,23 +62,45 @@ def success():
         a = request.form.getlist('keywords_a')
         w = request.form.getlist('keywords_l')
         cs = {}
+        cs["Keyword"] = []
         res = "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
         f.save(secure_filename(res + ".pdf"))
         m(res + ".pdf")
         if len(k) == 1:
             with open('out.txt', 'r', encoding='utf-8') as f1:
                 t = f1.read()
-                cs["Keyword"] = w[0].split(",")
-            kwrs = cs["Keyword"]
+            kwrs = w[0].split(",")
             rest = []
             for i in kwrs:
-                rest.append([x for x in extract_info(t, i)])
-            cs["Simple Search"] = rest
+                rest.append(x for x in extract_info(t, i))
+            restn = []
+            for i in rest:
+                restn.append(list(i))
+            rest1 = [x for xs in rest for x in xs]
+            cs["Simple Search"] = [x for xs in restn for x in xs]
+            count1 = 0
+            count2 = 0
+            cc = []
+            for i in kwrs:
+                for j in restn[count1]:
+                    if count2 == 0:
+                        cc.append(i)
+                        count2+=1
+                    else:
+                        cc.append("")
+                count1 += 1
+                count2 = 0
+            cs["Keyword"] = cc
             if len(a) == 1:
                 rest2 = []
+                count3 = 0
                 for i in kwrs:
                     rest2.append(adv_extract(t, i))
+                    for x in range(len(restn[count3])-1):
+                        rest2.append("")
+                    count3+=1
                 cs["Advanced Search"] = rest2
+            print(cs)
             df = pd.DataFrame(cs)
             df.to_csv("out.csv", index=False, encoding="utf-8")
             filepath = "out.zip"
