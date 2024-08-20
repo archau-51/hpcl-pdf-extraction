@@ -72,10 +72,10 @@ def success():
             kwrs = w[0].split(",")
             rest = []
             for i in kwrs:
-                rest.append(x for x in extract_info(t, i))
+                rest.append(extract_info(t, i))
             restn = []
             for i in rest:
-                restn.append(list(i))
+                restn.append(i)
             rest1 = [x for xs in rest for x in xs]
             cs["Simple Search"] = [x for xs in restn for x in xs]
             count1 = 0
@@ -87,7 +87,7 @@ def success():
                         cc.append(i)
                         count2+=1
                     else:
-                        cc.append("")
+                        cc.append(" ")
                 count1 += 1
                 count2 = 0
             cs["Keyword"] = cc
@@ -97,7 +97,7 @@ def success():
                 for i in kwrs:
                     rest2.append(adv_extract(t, i))
                     for x in range(len(restn[count3])-1):
-                        rest2.append("")
+                        rest2.append(" ")
                     count3+=1
                 cs["Advanced Search"] = rest2
             print(cs)

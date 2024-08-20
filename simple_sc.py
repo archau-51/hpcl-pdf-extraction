@@ -14,10 +14,13 @@ def extract_info(text=str, keyword=str):
     sentencizer = nltk.data.load('tokenizers/punkt/english.pickle')
     # Split the text into sentences
     sentences = sentencizer.tokenize(text)
-
+    l = []
     # Search for the keyword in each sentence
     for sentence in sentences:
         if keyword.lower() in sentence.lower():
-            yield sentence
+            l.append(sentence)
+    if len(l) == 0:
+        l.append(" ")
+    return l
 
 
