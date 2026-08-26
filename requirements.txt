@@ -9,3 +9,5 @@ nltk
 opencv-python
 ghostscript
 tensorflow
+pytesseract
+pdf2image

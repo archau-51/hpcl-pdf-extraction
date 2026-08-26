@@ -23,34 +23,107 @@ def _get_secret_key():
     return os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
 
 
-# import spacy
+try:
+    import pytesseract
+    from pdf2image import convert_from_path
+
+    _OCR_LIBS_AVAILABLE = True
+except ImportError:
+    pytesseract = None
+    convert_from_path = None
+    _OCR_LIBS_AVAILABLE = False
+
+# The OCR fallback additionally needs two system binaries that pip can't
+# install for us: the Tesseract OCR engine, and poppler (for pdf2image's
+# page-to-image rendering). Check for both up front so we can degrade
+# gracefully (skip OCR, log why) instead of crashing mid-request.
+_TESSERACT_AVAILABLE = _OCR_LIBS_AVAILABLE and shutil.which("tesseract") is not None
+_POPPLER_AVAILABLE = _OCR_LIBS_AVAILABLE and (
+    shutil.which("pdftoppm") is not None or shutil.which("pdftocairo") is not None
+)
+OCR_AVAILABLE = _OCR_LIBS_AVAILABLE and _TESSERACT_AVAILABLE and _POPPLER_AVAILABLE
+
+if _OCR_LIBS_AVAILABLE and not OCR_AVAILABLE:
+    _missing = []
+    if not _TESSERACT_AVAILABLE:
+        _missing.append("the 'tesseract' binary")
+    if not _POPPLER_AVAILABLE:
+        _missing.append("poppler ('pdftoppm'/'pdftocairo')")
+    print(
+        "OCR fallback disabled: missing "
+        + " and ".join(_missing)
+        + ". Scanned pages with no extractable text will be left blank."
+    )
+elif not _OCR_LIBS_AVAILABLE:
+    print(
+        "OCR fallback disabled: 'pytesseract'/'pdf2image' are not installed. "
+        "Scanned pages with no extractable text will be left blank."
+    )
+
+
+def _ocr_page(pdf_path, page_number):
+    """Run OCR on a single (1-indexed) page of pdf_path.
+
+    Returns the OCR'd text, or "" if OCR isn't available/fails, so callers
+    can degrade gracefully instead of crashing.
+    """
+    if not OCR_AVAILABLE:
+        return ""
+    try:
+        images = convert_from_path(pdf_path, first_page=page_number, last_page=page_number)
+        if not images:
+            return ""
+        return pytesseract.image_to_string(images[0])
+    except Exception as e:
+        print(f"OCR failed for page {page_number} of {pdf_path}: {e}")
+        return ""
 
 
 def ocr_pdf(pdf_path):
+    """Extract the text of every page in pdf_path.
+
+    Falls back to OCR for any page where normal text extraction returns
+    nothing (e.g. a scanned page with no embedded text layer), as long as
+    the OCR system dependencies are available (see OCR_AVAILABLE above).
+
+    Returns a list of per-page text, or None if the PDF itself couldn't be
+    opened at all.
+    """
     try:
-        # ocrmypdf.ocr(pdf_path, f"out_{pdf_path}", redo_ocr=True)
-        # reader = PdfReader(f"out_{pdf_path}")
         reader = PdfReader(pdf_path)
-        for page in reader.pages:
-            yield page.extract_text()
     except Exception as e:
-        print("Error:", e)
+        print(f"Error reading {pdf_path}: {e}")
         return None
+
+    texts = []
+    for i, page in enumerate(reader.pages, start=1):
+        try:
+            text = page.extract_text() or ""
+        except Exception as e:
+            print(f"Error extracting text from page {i} of {pdf_path}: {e}")
+            text = ""
+        if not text.strip():
+            text = _ocr_page(pdf_path, i)
+        texts.append(text)
+    return texts
 
 
 # noinspection PyBroadException
 def m(n, workdir):
+    """Extract tables and text from PDF n into workdir. Returns True on
+    success, False if the PDF couldn't be read at all."""
     texts = ocr_pdf(n)
-    if texts:
-        tables = camelot.read_pdf(n, pages="1-end")
-        # n and workdir are unique to this request, so there's no stale
-        # out.zip/out.txt from a previous request to worry about here.
-        tables.export(os.path.join(workdir, "out.csv"), f="csv", compress=True)
-        with open(os.path.join(workdir, "out.txt"), "a+", encoding="utf-8") as f:
-            for text in texts:
-                f.write(text)
-    else:
+    if texts is None:
         print("Failed to read the PDF.")
+        return False
+    tables = camelot.read_pdf(n, pages="1-end")
+    # n and workdir are unique to this request, so there's no stale
+    # out.zip/out.txt from a previous request to worry about here.
+    tables.export(os.path.join(workdir, "out.csv"), f="csv", compress=True)
+    with open(os.path.join(workdir, "out.txt"), "a+", encoding="utf-8") as f:
+        for text in texts:
+            f.write(text)
+    return True
 
 
 app = Flask(__name__)
@@ -100,7 +173,9 @@ def success():
             res = "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
             pdf_path = os.path.join(workdir, secure_filename(res + ".pdf"))
             f.save(pdf_path)
-            m(pdf_path, workdir)
+            if not m(pdf_path, workdir):
+                flash("Could not read that PDF. Please make sure it isn't corrupted or password protected.")
+                return redirect(url_for("main"))
             zip_path = os.path.join(workdir, "out.zip")
             with open(os.path.join(workdir, 'out.txt'), 'r', encoding='utf-8') as f1:
                 t = f1.read()
