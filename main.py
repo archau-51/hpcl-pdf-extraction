@@ -1,6 +1,10 @@
+import gc
+import io
 import os
 import random
+import shutil
 import string
+import tempfile
 import camelot
 from flask import *
 from pypdf import PdfReader
@@ -27,20 +31,16 @@ def ocr_pdf(pdf_path):
 
 
 # noinspection PyBroadException
-def m(n):
+def m(n, workdir):
     texts = ocr_pdf(n)
     if texts:
         tables = camelot.read_pdf(n, pages="1-end")
-        try:
-            os.remove("out.zip")
-            os.remove("out.txt")
-        except:
-            pass
-        tables.export("out.csv", f="csv", compress=True)
-        with open("out.txt", "a+", encoding="utf-8") as f:
+        # n and workdir are unique to this request, so there's no stale
+        # out.zip/out.txt from a previous request to worry about here.
+        tables.export(os.path.join(workdir, "out.csv"), f="csv", compress=True)
+        with open(os.path.join(workdir, "out.txt"), "a+", encoding="utf-8") as f:
             for text in texts:
                 f.write(text)
-        os.remove(n)
     else:
         print("Failed to read the PDF.")
 
@@ -63,54 +63,71 @@ def success():
         w = request.form.getlist('keywords_l')
         cs = {}
         cs["Keyword"] = []
-        res = "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
-        f.save(secure_filename(res + ".pdf"))
-        m(res + ".pdf")
-        if len(k) == 1:
-            with open('out.txt', 'r', encoding='utf-8') as f1:
-                t = f1.read()
-            kwrs = w[0].split(",")
-            rest = []
-            for i in kwrs:
-                rest.append(extract_info(t, i))
-            restn = []
-            for i in rest:
-                restn.append(i)
-            rest1 = [x for xs in rest for x in xs]
-            cs["Simple Search"] = [x for xs in restn for x in xs]
-            count1 = 0
-            count2 = 0
-            cc = []
-            for i in kwrs:
-                for j in restn[count1]:
-                    if count2 == 0:
-                        cc.append(i)
-                        count2+=1
-                    else:
-                        cc.append(" ")
-                count1 += 1
-                count2 = 0
-            cs["Keyword"] = cc
-            if len(a) == 1:
-                rest2 = []
-                count3 = 0
+        # Every request gets its own directory, so concurrent uploads can
+        # no longer stomp on each other's out.csv/out.txt/out.zip, and
+        # everything is cleaned up in `finally` once we're done with it.
+        workdir = tempfile.mkdtemp(prefix="hpcl_")
+        try:
+            res = "".join(random.choices(string.ascii_uppercase + string.digits, k=5))
+            pdf_path = os.path.join(workdir, secure_filename(res + ".pdf"))
+            f.save(pdf_path)
+            m(pdf_path, workdir)
+            zip_path = os.path.join(workdir, "out.zip")
+            if len(k) == 1:
+                with open(os.path.join(workdir, 'out.txt'), 'r', encoding='utf-8') as f1:
+                    t = f1.read()
+                kwrs = w[0].split(",")
+                rest = []
                 for i in kwrs:
-                    rest2.append(adv_extract(t, i))
-                    for x in range(len(restn[count3])-1):
-                        rest2.append(" ")
-                    count3+=1
-                cs["Advanced Search"] = rest2
-            print(cs)
-            df = pd.DataFrame(cs)
-            df.to_csv("out.csv", index=False, encoding="utf-8")
-            filepath = "out.zip"
-            with zipfile.ZipFile(filepath, "a", compression=zipfile.ZIP_DEFLATED) as zipf:
-                source_path = 'out.csv'
-                destination = 'keywords.csv'
-                zipf.write(source_path, destination)
-                os.remove("out.csv")
-        # return render_template("acknowledgement.html", name = f.filename)
-        return send_file("out.zip", as_attachment=True)
+                    rest.append(extract_info(t, i))
+                restn = []
+                for i in rest:
+                    restn.append(i)
+                rest1 = [x for xs in rest for x in xs]
+                cs["Simple Search"] = [x for xs in restn for x in xs]
+                count1 = 0
+                count2 = 0
+                cc = []
+                for i in kwrs:
+                    for j in restn[count1]:
+                        if count2 == 0:
+                            cc.append(i)
+                            count2+=1
+                        else:
+                            cc.append(" ")
+                    count1 += 1
+                    count2 = 0
+                cs["Keyword"] = cc
+                if len(a) == 1:
+                    rest2 = []
+                    count3 = 0
+                    for i in kwrs:
+                        rest2.append(adv_extract(t, i))
+                        for x in range(len(restn[count3])-1):
+                            rest2.append(" ")
+                        count3+=1
+                    cs["Advanced Search"] = rest2
+                print(cs)
+                df = pd.DataFrame(cs)
+                csv_path = os.path.join(workdir, "out.csv")
+                df.to_csv(csv_path, index=False, encoding="utf-8")
+                with zipfile.ZipFile(zip_path, "a", compression=zipfile.ZIP_DEFLATED) as zipf:
+                    destination = 'keywords.csv'
+                    zipf.write(csv_path, destination)
+            # return render_template("acknowledgement.html", name = f.filename)
+            # Read the zip into memory before removing workdir: send_file
+            # uses direct_passthrough for on-disk paths, which would leave
+            # us with no reliable hook to clean the directory up afterwards.
+            with open(zip_path, "rb") as zf:
+                zip_bytes = zf.read()
+        finally:
+            # camelot (via pdfminer) keeps its own file handle on the PDF
+            # open until it's garbage collected, which can block removing
+            # the directory it lives in on Windows - force a collection
+            # first so cleanup actually succeeds.
+            gc.collect()
+            shutil.rmtree(workdir, ignore_errors=True)
+        return send_file(io.BytesIO(zip_bytes), as_attachment=True, download_name="out.zip")
 
 
 if __name__ == "__main__":
