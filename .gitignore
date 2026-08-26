@@ -2,6 +2,9 @@ Lib/
 Include/
 Scripts/
 pyvenv.cfg
+__pycache__/
+*.pyc
+.pytest_cache/
 .idea/.gitignore
 .idea/hpcl.iml
 .idea/material_theme_project_new.xml
