@@ -15,6 +15,14 @@ import pandas as pd
 import zipfile
 
 
+def _get_secret_key():
+    # Needed for flash() to work. Override with a real secret via the
+    # FLASK_SECRET_KEY environment variable for anything long-lived; falls
+    # back to a random per-process value, which is fine for flashing a
+    # message across a single redirect within the same running app.
+    return os.environ.get("FLASK_SECRET_KEY", os.urandom(24))
+
+
 # import spacy
 
 
@@ -46,6 +54,7 @@ def m(n, workdir):
 
 
 app = Flask(__name__)
+app.secret_key = _get_secret_key()
 ALLOWED_EXTENSIONS = {"pdf"}
 
 
@@ -57,10 +66,30 @@ def main():
 @app.route("/success", methods=["POST"])
 def success():
     if request.method == "POST":
-        f = request.files["file"]
+        f = request.files.get("file")
+        if f is None or f.filename == "":
+            flash("Please choose a PDF file to upload.")
+            return redirect(url_for("main"))
+
         k = request.form.getlist('keywords')
         a = request.form.getlist('keywords_a')
         w = request.form.getlist('keywords_l')
+
+        # Previously, forgetting to tick "Keywords" (or leaving the
+        # keyword box empty) silently skipped keyword extraction with no
+        # feedback, so the user would just get back a zip with no
+        # keyword results and no explanation why. Validate up front and
+        # send them back to the form with a clear message instead.
+        if len(k) != 1:
+            flash('Please check the "Keywords" box and enter at least one keyword to search for.')
+            return redirect(url_for("main"))
+
+        kwrs = [kw.strip() for kw in w[0].split(",")] if w else []
+        kwrs = [kw for kw in kwrs if kw]
+        if not kwrs:
+            flash("Please enter at least one keyword in the keywords box.")
+            return redirect(url_for("main"))
+
         cs = {}
         cs["Keyword"] = []
         # Every request gets its own directory, so concurrent uploads can
@@ -73,47 +102,45 @@ def success():
             f.save(pdf_path)
             m(pdf_path, workdir)
             zip_path = os.path.join(workdir, "out.zip")
-            if len(k) == 1:
-                with open(os.path.join(workdir, 'out.txt'), 'r', encoding='utf-8') as f1:
-                    t = f1.read()
-                kwrs = w[0].split(",")
-                rest = []
-                for i in kwrs:
-                    rest.append(extract_info(t, i))
-                restn = []
-                for i in rest:
-                    restn.append(i)
-                rest1 = [x for xs in rest for x in xs]
-                cs["Simple Search"] = [x for xs in restn for x in xs]
-                count1 = 0
+            with open(os.path.join(workdir, 'out.txt'), 'r', encoding='utf-8') as f1:
+                t = f1.read()
+            rest = []
+            for i in kwrs:
+                rest.append(extract_info(t, i))
+            restn = []
+            for i in rest:
+                restn.append(i)
+            rest1 = [x for xs in rest for x in xs]
+            cs["Simple Search"] = [x for xs in restn for x in xs]
+            count1 = 0
+            count2 = 0
+            cc = []
+            for i in kwrs:
+                for j in restn[count1]:
+                    if count2 == 0:
+                        cc.append(i)
+                        count2+=1
+                    else:
+                        cc.append(" ")
+                count1 += 1
                 count2 = 0
-                cc = []
+            cs["Keyword"] = cc
+            if len(a) == 1:
+                rest2 = []
+                count3 = 0
                 for i in kwrs:
-                    for j in restn[count1]:
-                        if count2 == 0:
-                            cc.append(i)
-                            count2+=1
-                        else:
-                            cc.append(" ")
-                    count1 += 1
-                    count2 = 0
-                cs["Keyword"] = cc
-                if len(a) == 1:
-                    rest2 = []
-                    count3 = 0
-                    for i in kwrs:
-                        rest2.append(adv_extract(t, i))
-                        for x in range(len(restn[count3])-1):
-                            rest2.append(" ")
-                        count3+=1
-                    cs["Advanced Search"] = rest2
-                print(cs)
-                df = pd.DataFrame(cs)
-                csv_path = os.path.join(workdir, "out.csv")
-                df.to_csv(csv_path, index=False, encoding="utf-8")
-                with zipfile.ZipFile(zip_path, "a", compression=zipfile.ZIP_DEFLATED) as zipf:
-                    destination = 'keywords.csv'
-                    zipf.write(csv_path, destination)
+                    rest2.append(adv_extract(t, i))
+                    for x in range(len(restn[count3])-1):
+                        rest2.append(" ")
+                    count3+=1
+                cs["Advanced Search"] = rest2
+            print(cs)
+            df = pd.DataFrame(cs)
+            csv_path = os.path.join(workdir, "out.csv")
+            df.to_csv(csv_path, index=False, encoding="utf-8")
+            with zipfile.ZipFile(zip_path, "a", compression=zipfile.ZIP_DEFLATED) as zipf:
+                destination = 'keywords.csv'
+                zipf.write(csv_path, destination)
             # return render_template("acknowledgement.html", name = f.filename)
             # Read the zip into memory before removing workdir: send_file
             # uses direct_passthrough for on-disk paths, which would leave
